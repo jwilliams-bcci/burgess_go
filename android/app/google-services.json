@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "336296135887",
+    "project_id": "keystone-31e70",
+    "storage_bucket": "keystone-31e70.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:336296135887:android:a170add547347f630cfbba",
+        "android_client_info": {
+          "package_name": "com.burgess.bridge"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBiIIh7kZNdWUkuQPBKAuqUpIVfoUaMopA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:336296135887:android:6df190f1ef9d7ca80cfbba",
+        "android_client_info": {
+          "package_name": "com.burgess.bridge.beta"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBiIIh7kZNdWUkuQPBKAuqUpIVfoUaMopA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:336296135887:android:5d174ad03e1bf7880cfbba",
+        "android_client_info": {
+          "package_name": "com.burgessinc.burgess_go"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBiIIh7kZNdWUkuQPBKAuqUpIVfoUaMopA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
