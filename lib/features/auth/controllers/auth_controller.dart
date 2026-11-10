@@ -29,14 +29,7 @@ class AuthController extends Notifier<AuthState> {
           "Session found for ${_authService.currentUser!.email}. Loading profile...",
         );
 
-        final success = await loadUser();
-
-        // 🚨 Pass the ID from the loaded user state!
-        if (success && state.user != null) {
-          ref
-              .read(pushNotificationServiceProvider)
-              .initPushNotifications(state.user!.securityUserId);
-        }
+        await loadUser();
       } else {
         _logger.info("No active session found.");
       }
@@ -48,14 +41,7 @@ class AuthController extends Notifier<AuthState> {
 
   Future<void> checkLoginStatus() async {
     if (_authService.currentUser != null) {
-      final success = await loadUser();
-
-      // 🚨 Update here too!
-      if (success && state.user != null) {
-        ref
-            .read(pushNotificationServiceProvider)
-            .initPushNotifications(state.user!.securityUserId);
-      }
+      await loadUser();
     }
   }
 
@@ -64,6 +50,9 @@ class AuthController extends Notifier<AuthState> {
       final profile = await _authService.fetchUserProfile();
       if (profile != null) {
         state = state.copyWith(user: profile, isInitializing: false);
+        ref
+            .read(pushNotificationServiceProvider)
+            .initPushNotifications(profile.securityUserId);
         return true;
       }
     } catch (e) {

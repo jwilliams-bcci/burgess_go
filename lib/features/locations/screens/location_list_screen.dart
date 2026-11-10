@@ -9,7 +9,7 @@ import 'package:burgess_go/features/locations/widgets/location_card.dart';
 class SelectedCommunityNotifier extends Notifier<String?> {
   @override
   String? build() {
-    return null; // Initial state is null ("All Communities")
+    return null;
   }
 
   void updateCommunity(String? community) {
@@ -31,12 +31,10 @@ class LocationListScreen extends ConsumerWidget {
     final asyncLocations = ref.watch(locationListControllerProvider);
     final dashState = ref.watch(superintendentDashControllerProvider);
 
-    // 🔥 Removed the hardcoded screenWidth and columnCount variables!
-
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text("My Homes"),
+        title: const Text("My Addresses"),
         backgroundColor: const Color(0xFF003366),
         foregroundColor: Colors.white,
         actions: [
@@ -159,7 +157,7 @@ class LocationListScreen extends ConsumerWidget {
                       location: location,
                       inspections: locationInspections,
                       onTap: () {
-                        context.goNamed(
+                        context.pushNamed(
                           'location_management',
                           pathParameters: {
                             'locationId': location.locationId.toString(),
@@ -207,7 +205,7 @@ class LocationListScreen extends ConsumerWidget {
             ),
             SizedBox(height: 12),
             Text(
-              "Add New Location",
+              "Add New Address",
               style: TextStyle(
                 color: Color(0xFF003366),
                 fontWeight: FontWeight.bold,

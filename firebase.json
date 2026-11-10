@@ -11,7 +11,7 @@
       "ios": {
         "default": {
           "projectId": "keystone-31e70",
-          "appId": "1:336296135887:ios:7a83ef19a40d45b90cfbba",
+          "appId": "1:336296135887:ios:e14f61a883bb03f40cfbba",
           "uploadDebugSymbols": false,
           "fileOutput": "ios/Runner/GoogleService-Info.plist"
         }
@@ -21,7 +21,7 @@
           "projectId": "keystone-31e70",
           "configurations": {
             "android": "1:336296135887:android:5d174ad03e1bf7880cfbba",
-            "ios": "1:336296135887:ios:7a83ef19a40d45b90cfbba",
+            "ios": "1:336296135887:ios:e14f61a883bb03f40cfbba",
             "web": "1:336296135887:web:6199082725690ae10cfbba"
           }
         }

@@ -1,14 +1,18 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class InspectionType {
   final int inspectionTypeId;
   final String typeName;
   final String? iconStatus;
   final int? activeInspectionId;
+  final DateTime? activeInspectionDate;
 
   InspectionType({
     required this.inspectionTypeId,
     required this.typeName,
     this.iconStatus,
     this.activeInspectionId,
+    this.activeInspectionDate,
   });
 
   factory InspectionType.fromMap(Map<String, dynamic> map) {
@@ -18,6 +22,11 @@ class InspectionType {
       iconStatus: map['iconStatus'],
       activeInspectionId:
           (map['activeInspectionId'] ?? map['ActiveInspectionId'])?.toInt(),
+      activeInspectionDate: map['activeInspectionDate'] != null
+          ? (map['activeInspectionDate'] is Timestamp
+                ? (map['activeInspectionDate'] as Timestamp).toDate()
+                : DateTime.tryParse(map['activeInspectionDate'].toString()))
+          : null,
     );
   }
 
@@ -27,6 +36,7 @@ class InspectionType {
       'typeName': typeName,
       'iconStatus': iconStatus,
       'activeInspectionId': activeInspectionId,
+      'activeInspectionDate': activeInspectionDate?.toIso8601String(),
     };
   }
 }

@@ -163,61 +163,67 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             path: '/locations',
             name: 'locations_list',
             builder: (context, state) => const LocationListScreen(),
+            routes: [
+              // 🔥 ARCHITECTURAL FIX: Nested Add Location Route
+              // Path becomes: /locations/add
+              GoRoute(
+                path: 'add',
+                name: 'add_location',
+                builder: (context, state) => const AddLocationScreen(),
+              ),
+              // 🔥 ARCHITECTURAL FIX: Nested Location Details Route
+              // Path becomes: /locations/123
+              GoRoute(
+                path: ':locationId',
+                name: 'location_management',
+                builder: (context, state) {
+                  final locationIdStr = state.pathParameters['locationId'];
+                  final locationId = int.tryParse(locationIdStr ?? '') ?? 0;
+
+                  final extraData = state.extra as Map<String, dynamic>?;
+                  final location = extraData?['location'] as Location?;
+
+                  // 1. If we passed it normally via navigation, use it!
+                  if (location != null) {
+                    return LocationManagementScreen(location: location);
+                  }
+
+                  // 2. THE NOSQL WAY: Direct Document Lookup for Deep Links
+                  return FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance
+                        .collection('locations')
+                        .doc(locationId.toString())
+                        .get(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Scaffold(
+                          body: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+
+                      if (snapshot.hasData && snapshot.data!.exists) {
+                        final fetchedLocation = Location.fromFirestore(
+                          snapshot.data!,
+                        );
+                        return LocationManagementScreen(
+                          location: fetchedLocation,
+                        );
+                      }
+
+                      return const Scaffold(
+                        body: Center(child: Text("Location not found.")),
+                      );
+                    },
+                  );
+                },
+              ),
+            ],
           ),
 
           GoRoute(
             path: '/closed-locations',
             name: 'closed_locations',
             builder: (context, state) => const ClosedLocationsScreen(),
-          ),
-
-          GoRoute(
-            path: '/location/:locationId',
-            name: 'location_management',
-            builder: (context, state) {
-              final locationIdStr = state.pathParameters['locationId'];
-              final locationId = int.tryParse(locationIdStr ?? '') ?? 0;
-
-              final extraData = state.extra as Map<String, dynamic>?;
-              final location = extraData?['location'] as Location?;
-
-              // 1. If we passed it normally via navigation, use it!
-              if (location != null) {
-                return LocationManagementScreen(location: location);
-              }
-
-              // 2. 🔥 THE NOSQL WAY: Direct Document Lookup for Deep Links
-              return FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance
-                    .collection('locations')
-                    .doc(locationId.toString())
-                    .get(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Scaffold(
-                      body: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-
-                  if (snapshot.hasData && snapshot.data!.exists) {
-                    final fetchedLocation = Location.fromFirestore(
-                      snapshot.data!,
-                    );
-                    return LocationManagementScreen(location: fetchedLocation);
-                  }
-
-                  return const Scaffold(
-                    body: Center(child: Text("Location not found.")),
-                  );
-                },
-              );
-            },
-          ),
-
-          GoRoute(
-            path: '/add-location',
-            name: 'add_location',
-            builder: (context, state) => const AddLocationScreen(),
           ),
         ],
       ),

@@ -18,6 +18,7 @@ final locationRepositoryProvider = Provider<ILocationRepository>((ref) {
 // --- INTERFACE ---
 abstract class ILocationRepository {
   Stream<List<Location>> watchLocationsForUser(UserProfile user);
+  Future<Location?> getLocationById(int locationId);
 }
 
 // --- REPOSITORY ---
@@ -49,5 +50,26 @@ class LocationRepository implements ILocationRepository {
 
           return locations;
         });
+  }
+
+  @override
+  Future<Location?> getLocationById(int locationId) async {
+    try {
+      // Assuming your firestore documents contain a 'locationId' field.
+      // If the document ID is the locationId itself, you could use .doc(locationId.toString()).get()
+      final querySnapshot = await _db
+          .collection('locations')
+          .where('locationId', isEqualTo: locationId)
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        return Location.fromFirestore(querySnapshot.docs.first);
+      }
+      return null;
+    } catch (e) {
+      _logger.error("Failed to fetch location by ID: $e");
+      return null;
+    }
   }
 }

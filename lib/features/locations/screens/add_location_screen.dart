@@ -5,6 +5,62 @@ import 'package:go_router/go_router.dart';
 
 import 'package:burgess_go/features/locations/controllers/add_location_controller.dart';
 import 'package:burgess_go/features/locations/models/create_location_request.dart';
+import 'package:burgess_go/features/locations/states/add_location_state.dart';
+
+// --- STRING FORMATTING UTILITIES ---
+extension StringFormatting on String {
+  /// Converts a string to Title Case (e.g., "my community" -> "My Community")
+  String toTitleCase() {
+    if (trim().isEmpty) return this;
+    return trim()
+        .split(RegExp(r'\s+'))
+        .map((word) {
+          if (word.isEmpty) return word;
+          return word[0].toUpperCase() + word.substring(1).toLowerCase();
+        })
+        .join(' ');
+  }
+
+  /// Expands common street abbreviations at the end of a string
+  String expandStreetSuffix() {
+    if (trim().isEmpty) return this;
+    final words = split(RegExp(r'\s+'));
+
+    // Grab the last word and remove any periods (e.g., "Blvd." -> "blvd")
+    final lastWord = words.last.toLowerCase().replaceAll('.', '');
+
+    const suffixes = {
+      'ave': 'Avenue',
+      'blvd': 'Boulevard',
+      'cir': 'Circle',
+      'ct': 'Court',
+      'dr': 'Drive',
+      'hwy': 'Highway',
+      'ln': 'Lane',
+      'pkwy': 'Parkway',
+      'pl': 'Place',
+      'rd': 'Road',
+      'st': 'Street',
+      'sq': 'Square',
+      'ter': 'Terrace',
+      'trl': 'Trail',
+      'wy': 'Way',
+      'way': 'Way',
+    };
+
+    if (suffixes.containsKey(lastWord)) {
+      words[words.length - 1] = suffixes[lastWord]!;
+      return words.join(' ');
+    }
+    return this;
+  }
+
+  /// Strips out everything except letters and numbers for fair comparisons
+  /// (e.g., "101-A" and "101 A" both become "101a")
+  String normalizeForComparison() {
+    return toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+}
 
 class AddLocationScreen extends ConsumerStatefulWidget {
   const AddLocationScreen({super.key});
@@ -19,19 +75,21 @@ class _AddLocationScreenState extends ConsumerState<AddLocationScreen> {
   // Controllers for the Autocomplete Text inputs
   final _communityController = TextEditingController();
   final _streetController = TextEditingController();
+  final _stateController = TextEditingController();
 
   // Standard Form Controllers
   final _streetNumberController = TextEditingController();
   final _cityController = TextEditingController();
   final _lotNumberController = TextEditingController();
-  final _sqftController = TextEditingController(text: "1"); // Defaults to 1
+  final _sqftController = TextEditingController(text: "1");
+
+  // 🔥 Focus node to detect when the user taps the Sq. Ft. field
+  final _sqftFocusNode = FocusNode();
 
   // Local state to track selections
   int? _selectedCommunityId;
   int? _selectedStreetId;
-  String? _selectedState;
 
-  // List of standard US State abbreviations
   static const List<String> _usStates = [
     'AL',
     'AK',
@@ -89,32 +147,51 @@ class _AddLocationScreenState extends ConsumerState<AddLocationScreen> {
   void initState() {
     super.initState();
 
+    // 🔥 Highlight all text when Square Footage field is tapped
+    _sqftFocusNode.addListener(() {
+      if (_sqftFocusNode.hasFocus) {
+        // We use microtask to ensure this happens AFTER the tap cursor is placed
+        Future.microtask(() {
+          _sqftController.selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: _sqftController.text.length,
+          );
+        });
+      }
+    });
+
     // 🔥 Magic Listener #1: Watch the Community Input
     _communityController.addListener(() {
       final state = ref.read(addLocationControllerProvider);
       final text = _communityController.text.trim();
 
-      // See if what they typed exactly matches an existing community
       final match = state.communities
           .where((c) => c.name.toLowerCase() == text.toLowerCase())
           .firstOrNull;
 
       if (match != null) {
         if (_selectedCommunityId != match.id) {
-          setState(() => _selectedCommunityId = match.id);
-          // They selected a real community! Fetch its streets!
+          setState(() {
+            _selectedCommunityId = match.id;
+
+            // Pre-populate City & State strongly typed
+            if (match.city != null && match.city!.trim().isNotEmpty) {
+              _cityController.text = match.city!.toTitleCase();
+            }
+            if (match.state != null && match.state!.trim().isNotEmpty) {
+              _stateController.text = match.state!.toUpperCase();
+            }
+          });
           ref
               .read(addLocationControllerProvider.notifier)
               .fetchStreetsForCommunity(match.id);
         }
       } else {
-        // They are typing a brand new community
         if (_selectedCommunityId != null) {
           setState(() {
             _selectedCommunityId = null;
-            _selectedStreetId = null; // Reset street if community changes
+            _selectedStreetId = null;
             _streetController.clear();
-            _streetNumberController.clear(); // 🔥 Clear number too
           });
         }
       }
@@ -133,7 +210,6 @@ class _AddLocationScreenState extends ConsumerState<AddLocationScreen> {
         if (_selectedStreetId != match.id) {
           setState(() => _selectedStreetId = match.id);
 
-          // 🔥 NEW: Fetch Street Numbers since they picked a real street!
           if (_selectedCommunityId != null) {
             ref
                 .read(addLocationControllerProvider.notifier)
@@ -144,8 +220,6 @@ class _AddLocationScreenState extends ConsumerState<AddLocationScreen> {
         if (_selectedStreetId != null) {
           setState(() {
             _selectedStreetId = null;
-            _streetNumberController
-                .clear(); // 🔥 Clear number if street changes
           });
         }
       }
@@ -154,8 +228,10 @@ class _AddLocationScreenState extends ConsumerState<AddLocationScreen> {
 
   @override
   void dispose() {
+    _sqftFocusNode.dispose(); // 🔥 Clean up the focus node!
     _communityController.dispose();
     _streetController.dispose();
+    _stateController.dispose();
     _streetNumberController.dispose();
     _cityController.dispose();
     _lotNumberController.dispose();
@@ -184,25 +260,28 @@ class _AddLocationScreenState extends ConsumerState<AddLocationScreen> {
     }
     if (numberText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please select or enter a Street Number."),
-        ),
+        const SnackBar(content: Text("Please enter a Street Number.")),
       );
       return;
     }
 
-    // Build the payload mapping perfectly to our C# DTO
     final request = CreateLocationRequest(
       communityId: _selectedCommunityId,
-      newCommunityName: _selectedCommunityId == null ? communityText : null,
+      newCommunityName: _selectedCommunityId == null
+          ? communityText.toTitleCase()
+          : null,
       streetNameId: _selectedStreetId,
-      newStreetName: _selectedStreetId == null ? streetText : null,
+      newStreetName: _selectedStreetId == null
+          ? streetText.toTitleCase().expandStreetSuffix()
+          : null,
       streetNumber: numberText,
       squareFootage: int.tryParse(_sqftController.text) ?? 1,
       city: _cityController.text.trim().isEmpty
           ? null
-          : _cityController.text.trim(),
-      state: _selectedState,
+          : _cityController.text.trim().toTitleCase(),
+      state: _stateController.text.trim().isEmpty
+          ? null
+          : _stateController.text.trim().toUpperCase(),
       lotNumber: _lotNumberController.text.trim().isEmpty
           ? null
           : _lotNumberController.text.trim(),
@@ -219,9 +298,8 @@ class _AddLocationScreenState extends ConsumerState<AddLocationScreen> {
           backgroundColor: Colors.green,
         ),
       );
-      context.goNamed('locations_list'); // Go back to the list screen
+      context.pushNamed('locations_list');
     } else if (mounted) {
-      // The controller automatically catches SQL errors and puts them in state.errorMessage
       final error = ref.read(addLocationControllerProvider).errorMessage;
       if (error != null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -239,6 +317,37 @@ class _AddLocationScreenState extends ConsumerState<AddLocationScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(addLocationControllerProvider);
 
+    // 🔥 THE MAGIC: Lazy Auto-Correct Listener
+    ref.listen<AddLocationState>(addLocationControllerProvider, (
+      previous,
+      next,
+    ) {
+      if (previous?.isLoadingStreetNumbers == true &&
+          next.isLoadingStreetNumbers == false) {
+        final typedNumber = _streetNumberController.text;
+
+        if (typedNumber.isNotEmpty && next.streetNumbers.isNotEmpty) {
+          final normalizedTyped = typedNumber.normalizeForComparison();
+
+          final dbMatch = next.streetNumbers.where((dbNum) {
+            return dbNum.normalizeForComparison() == normalizedTyped;
+          }).firstOrNull;
+
+          if (dbMatch != null && dbMatch != typedNumber) {
+            _streetNumberController.text = dbMatch;
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("✨ Auto-formatted street number: $dbMatch"),
+                duration: const Duration(seconds: 2),
+                backgroundColor: Colors.blue[800],
+              ),
+            );
+          }
+        }
+      }
+    });
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Add New Home"),
@@ -254,7 +363,6 @@ class _AddLocationScreenState extends ConsumerState<AddLocationScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Error Banner
                     if (state.errorMessage != null)
                       Container(
                         width: double.infinity,
@@ -295,7 +403,41 @@ class _AddLocationScreenState extends ConsumerState<AddLocationScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // --- 2. STREET DROPDOWN ---
+                    // --- 2. STREET NUMBER (Moved up!) & SQFT ---
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: TextFormField(
+                            controller: _streetNumberController,
+                            decoration: const InputDecoration(
+                              labelText: 'Street Number *',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 1,
+                          child: TextFormField(
+                            controller: _sqftController,
+                            focusNode:
+                                _sqftFocusNode, // 🔥 Attach the FocusNode
+                            decoration: const InputDecoration(
+                              labelText: 'Sq. Ft.',
+                              border: OutlineInputBorder(),
+                            ),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // --- 3. STREET DROPDOWN (Moved down!) ---
                     Stack(
                       alignment: Alignment.centerRight,
                       children: [
@@ -321,54 +463,6 @@ class _AddLocationScreenState extends ConsumerState<AddLocationScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // --- 3. STREET NUMBER (NOW A DROPDOWN) & SQFT ---
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 2,
-                          child: Stack(
-                            alignment: Alignment.centerRight,
-                            children: [
-                              // 🔥 Specialized dropdown for the list of Strings!
-                              _buildStringDropdown(
-                                key: const ValueKey('street_number_dropdown'),
-                                controller: _streetNumberController,
-                                label: "Street Number *",
-                                items: state.streetNumbers,
-                              ),
-                              if (state.isLoadingStreetNumbers)
-                                const Padding(
-                                  padding: EdgeInsets.only(right: 16.0),
-                                  child: SizedBox(
-                                    height: 16,
-                                    width: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          flex: 1,
-                          child: TextFormField(
-                            controller: _sqftController,
-                            decoration: const InputDecoration(
-                              labelText: 'Sq. Ft.',
-                              border: OutlineInputBorder(),
-                            ),
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
                     // --- 4. CITY & STATE ---
                     Row(
                       children: [
@@ -385,20 +479,28 @@ class _AddLocationScreenState extends ConsumerState<AddLocationScreen> {
                         const SizedBox(width: 16),
                         Expanded(
                           flex: 1,
-                          child: DropdownButtonFormField<String>(
-                            initialValue: _selectedState,
-                            decoration: const InputDecoration(
-                              labelText: 'State',
-                              border: OutlineInputBorder(),
-                            ),
-                            items: _usStates.map((stateAbbr) {
-                              return DropdownMenuItem<String>(
-                                value: stateAbbr,
-                                child: Text(stateAbbr),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              return DropdownMenu<String>(
+                                width: constraints.maxWidth,
+                                menuHeight:
+                                    200, // 🔥 Constrain dropdown height (shows ~3-4 states)
+                                controller: _stateController,
+                                enableFilter: true,
+                                enableSearch: true,
+                                requestFocusOnTap: true,
+                                label: const Text('State'),
+                                inputDecorationTheme:
+                                    const InputDecorationTheme(
+                                      border: OutlineInputBorder(),
+                                    ),
+                                dropdownMenuEntries: _usStates.map((stateAbbr) {
+                                  return DropdownMenuEntry<String>(
+                                    value: stateAbbr,
+                                    label: stateAbbr,
+                                  );
+                                }).toList(),
                               );
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() => _selectedState = value);
                             },
                           ),
                         ),
@@ -450,7 +552,6 @@ class _AddLocationScreenState extends ConsumerState<AddLocationScreen> {
     );
   }
 
-  // Helper for Communities & Streets (Objects with IDs)
   Widget _buildDynamicDropdown({
     required TextEditingController controller,
     required String label,
@@ -463,13 +564,18 @@ class _AddLocationScreenState extends ConsumerState<AddLocationScreen> {
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
+            // 🔥 Removed ValueListenableBuilder so entries are ALWAYS populated.
+            // This allows the menu to instantly pop open on tap!
             return DropdownMenu<int>(
               width: constraints.maxWidth,
+              menuHeight: 200, // Constrain dropdown height (shows ~3-4 items)
               controller: controller,
               enableFilter: true,
               enableSearch: true,
               requestFocusOnTap: true,
               label: Text(label),
+              hintText:
+                  'Type to search or add new entry', // 🔥 Added intuitive hint text
               inputDecorationTheme: const InputDecorationTheme(
                 border: OutlineInputBorder(),
               ),
@@ -483,7 +589,7 @@ class _AddLocationScreenState extends ConsumerState<AddLocationScreen> {
           Padding(
             padding: const EdgeInsets.only(top: 6.0, left: 4.0),
             child: Text(
-              "✨ Creating new: '${controller.text}'",
+              "✨ Creating new: '${controller.text.toTitleCase().expandStreetSuffix()}'",
               style: TextStyle(
                 color: Colors.blue[800],
                 fontSize: 12,
@@ -492,33 +598,6 @@ class _AddLocationScreenState extends ConsumerState<AddLocationScreen> {
             ),
           ),
       ],
-    );
-  }
-
-  // 🔥 NEW: Helper for Street Numbers (Simple Strings)
-  Widget _buildStringDropdown({
-    required TextEditingController controller,
-    required String label,
-    required List<String> items,
-    Key? key,
-  }) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return DropdownMenu<String>(
-          width: constraints.maxWidth,
-          controller: controller,
-          enableFilter: true,
-          enableSearch: true,
-          requestFocusOnTap: true,
-          label: Text(label),
-          inputDecorationTheme: const InputDecorationTheme(
-            border: OutlineInputBorder(),
-          ),
-          dropdownMenuEntries: items.map((item) {
-            return DropdownMenuEntry<String>(value: item, label: item);
-          }).toList(),
-        );
-      },
     );
   }
 }

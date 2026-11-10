@@ -1,4 +1,5 @@
 import 'package:burgess_go/core/models/location/location_history.dart';
+import 'package:burgess_go/core/providers/holiday_provider.dart';
 import 'package:burgess_go/core/utils/scheduling_helper.dart';
 import 'package:burgess_go/features/inspections/widgets/schedule_date_dialog.dart';
 import 'package:burgess_go/features/locations/controllers/location_management_controller.dart';
@@ -17,59 +18,81 @@ class LocationManagementScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDesktop = MediaQuery.of(context).size.width > 900;
+    // 1. Trigger the holiday fetch in the background so it's cached and ready!
+    ref.watch(holidayProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        title: Text(
-          location.lotNumber != null && location.lotNumber!.isNotEmpty
-              ? "Lot ${location.lotNumber} Details"
-              : "Home Details",
+    // Wrap the Scaffold in a PopScope to catch Android Hardware Back Button presses
+    return PopScope(
+      canPop: context.canPop(), // Allow native pop if stack has history
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        // If the system successfully popped (didPop == true), do nothing.
+        if (didPop) return;
+
+        // If we are here, the system couldn't pop (stack is empty).
+        // Catch the exit and route them back to the list instead!
+        context.goNamed('locations_list');
+      },
+      child: Scaffold(
+        backgroundColor: Colors.grey[100],
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Back to Homes',
+            onPressed: () {
+              // Gracefully handle the AppBar back button animation
+              if (context.canPop()) {
+                context.pop(); // Uses the native reverse-swipe animation
+              } else {
+                context.goNamed('locations_list'); // Fallback if deep-linked
+              }
+            },
+          ),
+          title: Text(
+            location.lotNumber != null && location.lotNumber!.isNotEmpty
+                ? "Lot ${location.lotNumber} Details"
+                : "Home Details",
+          ),
+          backgroundColor: const Color(0xFF003366),
+          foregroundColor: Colors.white,
         ),
-        backgroundColor: const Color(0xFF003366),
-        foregroundColor: Colors.white,
-      ),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('locations')
-            .doc(location.locationId.toString())
-            .snapshots(),
-        builder: (context, snapshot) {
-          // Default to the location passed via constructor while loading
-          Location liveLocation = location;
+        body: StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('locations')
+              .doc(location.locationId.toString())
+              .snapshots(),
+          builder: (context, snapshot) {
+            Location liveLocation = location;
 
-          // If Firestore has new data, use it instantly!
-          if (snapshot.hasData && snapshot.data!.exists) {
-            liveLocation = Location.fromFirestore(snapshot.data!);
-          }
+            if (snapshot.hasData && snapshot.data!.exists) {
+              liveLocation = Location.fromFirestore(snapshot.data!);
+            }
 
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeroHeader(liveLocation), // Pass the liveLocation down
-                _buildActionGrid(context, ref, liveLocation),
+            return SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeroHeader(liveLocation),
+                  _buildActionGrid(context, ref, liveLocation),
 
-                const SizedBox(height: 8),
+                  const SizedBox(height: 8),
 
-                Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1200),
-                    child: _buildInspectionListSection(
-                      context,
-                      ref,
-                      liveLocation, // Pass the liveLocation down
-                      isDesktop: isDesktop,
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1200),
+                      child: _buildInspectionListSection(
+                        context,
+                        ref,
+                        liveLocation,
+                      ),
                     ),
                   ),
-                ),
 
-                const SizedBox(height: 48),
-              ],
-            ),
-          );
-        },
+                  const SizedBox(height: 48),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -85,7 +108,7 @@ class LocationManagementScreen extends ConsumerWidget {
       height: 220,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFF003366), // Fallback Burgess Blue
+        color: const Color(0xFF003366),
         image: location.elevationPhotoUrl != null
             ? DecorationImage(
                 image: NetworkImage(location.elevationPhotoUrl!),
@@ -186,7 +209,6 @@ class LocationManagementScreen extends ConsumerWidget {
             label: "Location Attachments",
             color: Colors.green[600]!,
             onTap: () {
-              // Trigger the generic dialog using data from the Location document
               final attachments =
                   (location as dynamic).locationAttachments ?? [];
               _showAttachmentsDialog(
@@ -257,57 +279,12 @@ class LocationManagementScreen extends ConsumerWidget {
     );
   }
 
-  // --- RESPONSIVE TILE BUTTON HELPER ---
-  Widget _buildTileAction({
-    required bool isDesktop,
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    if (isDesktop) {
-      return Padding(
-        padding: const EdgeInsets.only(left: 8.0),
-        child: OutlinedButton.icon(
-          onPressed: onTap,
-          icon: Icon(icon, size: 18, color: color),
-          label: Text(
-            label,
-            style: TextStyle(color: color, fontWeight: FontWeight.bold),
-          ),
-          style: OutlinedButton.styleFrom(
-            side: BorderSide(color: color),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
-        ),
-      );
-    } else {
-      return Padding(
-        padding: const EdgeInsets.only(left: 4.0),
-        child: Tooltip(
-          message: label,
-          child: IconButton(
-            icon: Icon(icon, color: color, size: 22),
-            onPressed: onTap,
-            splashRadius: 20,
-            constraints: const BoxConstraints(), // Minimizes default padding
-            padding: const EdgeInsets.all(8),
-          ),
-        ),
-      );
-    }
-  }
-
   // --- FULL WIDTH SECTION: INSPECTION LIST ---
   Widget _buildInspectionListSection(
     BuildContext context,
     WidgetRef ref,
-    Location location, {
-    required bool isDesktop,
-  }) {
+    Location location,
+  ) {
     final contractTypes = location.availableInspectionTypes ?? [];
     const double horizontalPadding = 16.0;
 
@@ -363,6 +340,29 @@ class LocationManagementScreen extends ConsumerWidget {
                 final typeObj = contractTypes[index];
                 final String? effectiveStatus = typeObj.iconStatus;
 
+                // Dynamically check for history
+                final bool hasHistory =
+                    location.locationHistories?.any(
+                      (h) => h.inspectionTypeId == typeObj.inspectionTypeId,
+                    ) ??
+                    false;
+
+                DateTime? inspectionDate;
+                try {
+                  inspectionDate =
+                      (typeObj as dynamic).activeInspectionDate ??
+                      (typeObj as dynamic).scheduledDate;
+                } catch (_) {}
+
+                String dateSuffixFor = "";
+                String dateSuffixOn = "";
+                if (inspectionDate != null) {
+                  final dateStr =
+                      "${inspectionDate.month}/${inspectionDate.day}/${inspectionDate.year}";
+                  dateSuffixFor = " for $dateStr";
+                  dateSuffixOn = " on $dateStr";
+                }
+
                 IconData icon;
                 Color iconColor;
                 String statusText;
@@ -372,34 +372,39 @@ class LocationManagementScreen extends ConsumerWidget {
                   case 'Pass':
                     icon = Icons.check_circle;
                     iconColor = Colors.green;
-                    statusText = "Passed";
+                    statusText = "Passed$dateSuffixOn";
                     break;
                   case 'Fail':
                     icon = Icons.cancel;
                     iconColor = Colors.red;
-                    statusText = "Failed";
+                    statusText = "Failed$dateSuffixOn";
+                    break;
+                  case 'Not Ready':
+                    icon = Icons.warning_amber_rounded;
+                    iconColor = Colors.orange[800]!;
+                    statusText = "Not Ready$dateSuffixOn";
                     break;
                   case 'Complete':
                     icon = Icons.fact_check;
                     iconColor = Colors.blue[800]!;
-                    statusText = "Complete";
+                    statusText = "Complete$dateSuffixOn";
                     break;
                   case 'Assigned':
                     icon = Icons.person;
                     iconColor = Colors.purple;
-                    statusText = "Assigned";
+                    statusText = "Assigned$dateSuffixFor";
                     break;
                   case 'Scheduled':
                     icon = Icons.schedule;
                     iconColor = Colors.green;
-                    statusText = "Scheduled";
+                    statusText = "Scheduled$dateSuffixFor";
                     break;
                   case 'Pending':
                     icon = Icons.schedule;
                     iconColor = Colors.orange;
-                    statusText = "Pending";
+                    statusText = "Pending$dateSuffixFor";
                     break;
-                  default: // 'Unknown' or Unscheduled
+                  default:
                     icon = Icons.radio_button_unchecked;
                     iconColor = Colors.grey[400]!;
                     statusText = "Unscheduled";
@@ -407,96 +412,246 @@ class LocationManagementScreen extends ConsumerWidget {
                     break;
                 }
 
-                List<Widget> actionButtons = [];
+                // --- BUILD THE CONTEXT MENU ---
+                List<PopupMenuEntry<String>> menuItems = [];
 
                 if (!location.isClosedOut) {
-                  // 1. Schedule vs Reschedule Logic
                   if (isUnscheduled) {
-                    actionButtons.add(
-                      _buildTileAction(
-                        isDesktop: isDesktop,
-                        icon: Icons.calendar_month,
-                        label: "Schedule",
-                        color: Colors.blue[700]!,
-                        onTap: () =>
-                            _openScheduleDialog(context, ref, location),
+                    menuItems.add(
+                      PopupMenuItem(
+                        value: 'schedule',
+                        child: Row(
+                          children: [
+                            Icon(Icons.calendar_month, color: Colors.blue[700]),
+                            const SizedBox(width: 12),
+                            const Text('Schedule'),
+                          ],
+                        ),
                       ),
                     );
-                  } else if (effectiveStatus == 'Scheduled' ||
-                      effectiveStatus == 'Assigned') {
-                    DateTime? inspectionDate;
-                    try {
-                      inspectionDate =
-                          (typeObj as dynamic).inspectionDate ??
-                          (typeObj as dynamic).scheduledDate;
-                    } catch (_) {}
+                  } else {
+                    // Reschedule
+                    if (effectiveStatus == 'Scheduled' ||
+                        effectiveStatus == 'Assigned') {
+                      bool canReschedule = true;
+                      if (inspectionDate != null) {
+                        canReschedule = SchedulingHelper.canRescheduleToday(
+                          inspectionDate,
+                        );
+                      }
 
-                    bool canReschedule = true;
-                    if (inspectionDate != null) {
-                      canReschedule = SchedulingHelper.canRescheduleToday(
-                        inspectionDate,
+                      if (canReschedule) {
+                        menuItems.add(
+                          PopupMenuItem(
+                            value: 'reschedule',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.edit_calendar,
+                                  color: Colors.orange[700],
+                                ),
+                                const SizedBox(width: 12),
+                                const Text('Reschedule'),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+                    }
+
+                    // Reinspect & View Defects
+                    if (effectiveStatus == 'Fail' ||
+                        effectiveStatus == 'Not Ready') {
+                      menuItems.add(
+                        PopupMenuItem(
+                          value: 'reinspect',
+                          child: Row(
+                            children: [
+                              Icon(Icons.replay, color: Colors.red[700]),
+                              const SizedBox(width: 12),
+                              const Text('Reinspect'),
+                            ],
+                          ),
+                        ),
+                      );
+
+                      menuItems.add(
+                        PopupMenuItem(
+                          value: 'view_defects',
+                          child: Row(
+                            children: [
+                              Icon(Icons.fact_check, color: Colors.red[700]),
+                              const SizedBox(width: 12),
+                              const Text('View Defects'),
+                            ],
+                          ),
+                        ),
                       );
                     }
 
-                    actionButtons.add(
-                      _buildTileAction(
-                        isDesktop: isDesktop,
-                        icon: Icons.edit_calendar,
-                        label: "Reschedule",
-                        color: canReschedule
-                            ? Colors.orange[700]!
-                            : Colors.grey,
-                        onTap: () {
-                          if (canReschedule) {
-                            _openScheduleDialog(context, ref, location);
+                    // Message
+                    if (effectiveStatus == 'Assigned') {
+                      menuItems.add(
+                        PopupMenuItem(
+                          value: 'message',
+                          child: Row(
+                            children: [
+                              Icon(Icons.message, color: Colors.purple[700]),
+                              const SizedBox(width: 12),
+                              const Text('Message'),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+
+                    // Attachments
+                    menuItems.add(
+                      PopupMenuItem(
+                        value: 'attachments',
+                        child: Row(
+                          children: [
+                            Icon(Icons.attach_file, color: Colors.teal[600]),
+                            const SizedBox(width: 12),
+                            const Text('Attachments'),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  // History (Applies to any status, as long as it has history entries)
+                  if (hasHistory) {
+                    menuItems.add(
+                      PopupMenuItem(
+                        value: 'history',
+                        child: Row(
+                          children: [
+                            Icon(Icons.history, color: Colors.blueGrey[700]),
+                            const SizedBox(width: 12),
+                            const Text('History'),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                }
+
+                Widget? trailingWidget;
+                if (menuItems.isNotEmpty) {
+                  trailingWidget = PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, color: Colors.grey),
+                    onSelected: (value) async {
+                      switch (value) {
+                        case 'schedule':
+                          _openScheduleDialog(
+                            context,
+                            ref,
+                            location,
+                            preselectedTypeId: typeObj.inspectionTypeId,
+                          );
+                          break;
+
+                        case 'reschedule':
+                          final activeId = typeObj.activeInspectionId;
+                          if (activeId != null && activeId > 0) {
+                            _openRescheduleDialog(context, ref, activeId);
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                  "Cannot reschedule past 7:30 AM on the day of the inspection.",
+                                  "Cannot reschedule: active inspection ID not found.",
                                 ),
-                                backgroundColor: Colors.red,
+                                backgroundColor: Colors.orange,
                               ),
                             );
                           }
-                        },
-                      ),
-                    );
-                  }
+                          break;
 
-                  // 2. Attachments (Inspection Specific)
-                  if (!isUnscheduled) {
-                    actionButtons.add(
-                      _buildTileAction(
-                        isDesktop: isDesktop,
-                        icon: Icons.attach_file,
-                        label: "Attachments",
-                        color: Colors.teal[600]!,
-                        onTap: () {
-                          // Trigger the generic dialog using data from the Inspection document
-                          final attachments =
-                              (typeObj as dynamic).inspectionAttachments ?? [];
-                          _showAttachmentsDialog(
-                            context,
-                            "Inspection Attachments",
-                            attachments,
-                          );
-                        },
-                      ),
-                    );
-                  }
+                        case 'reinspect':
+                          int? targetInspectionId = typeObj.activeInspectionId;
+                          if (targetInspectionId == null ||
+                              targetInspectionId <= 0) {
+                            final histories =
+                                location.locationHistories
+                                    ?.where(
+                                      (h) =>
+                                          h.inspectionTypeId ==
+                                          typeObj.inspectionTypeId,
+                                    )
+                                    .toList() ??
+                                [];
 
-                  // 3. Message Consultant
-                  if (effectiveStatus == 'Assigned') {
-                    actionButtons.add(
-                      _buildTileAction(
-                        isDesktop: isDesktop,
-                        icon: Icons.message,
-                        label: "Message",
-                        color: Colors.purple[700]!,
-                        onTap: () {
+                            if (histories.isNotEmpty) {
+                              histories.sort(
+                                (a, b) => (b.submissionDate ?? DateTime(1900))
+                                    .compareTo(
+                                      a.submissionDate ?? DateTime(1900),
+                                    ),
+                              );
+                              targetInspectionId = histories.first.inspectionId;
+                            }
+                          }
+
+                          if (targetInspectionId != null &&
+                              targetInspectionId > 0) {
+                            _openReinspectionDialog(
+                              context,
+                              ref,
+                              targetInspectionId,
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  "Cannot reinspect: previous inspection record not found.",
+                                ),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                          }
+                          break;
+
+                        case 'view_defects':
+                          int? targetDefectId = typeObj.activeInspectionId;
+                          if (targetDefectId == null || targetDefectId <= 0) {
+                            final histories =
+                                location.locationHistories
+                                    ?.where(
+                                      (h) =>
+                                          h.inspectionTypeId ==
+                                          typeObj.inspectionTypeId,
+                                    )
+                                    .toList() ??
+                                [];
+
+                            if (histories.isNotEmpty) {
+                              histories.sort(
+                                (a, b) => (b.submissionDate ?? DateTime(1900))
+                                    .compareTo(
+                                      a.submissionDate ?? DateTime(1900),
+                                    ),
+                              );
+                              targetDefectId = histories.first.inspectionId;
+                            }
+                          }
+
+                          if (targetDefectId != null && targetDefectId > 0) {
+                            context.push('/inspection/$targetDefectId/defects');
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  "Cannot view defects: previous inspection record not found.",
+                                ),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                          }
+                          break;
+
+                        case 'message':
                           final activeId = typeObj.activeInspectionId;
-
                           if (activeId != null && activeId > 0) {
                             showModalBottomSheet(
                               context: context,
@@ -522,22 +677,64 @@ class LocationManagementScreen extends ConsumerWidget {
                               ),
                             );
                           }
-                        },
-                      ),
-                    );
-                  }
+                          break;
 
-                  // 4. View History
-                  if (effectiveStatus == 'Complete' ||
-                      effectiveStatus == 'Fail') {
-                    actionButtons.add(
-                      _buildTileAction(
-                        isDesktop: isDesktop,
-                        icon: Icons.history,
-                        label: "History",
-                        color: Colors.blueGrey[700]!,
-                        onTap: () {
-                          // 1. Get all histories for THIS specific type
+                        case 'attachments':
+                          final activeId = typeObj.activeInspectionId;
+                          if (activeId != null && activeId > 0) {
+                            // Show a loading indicator while fetching
+                            showDialog(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (context) => const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            );
+
+                            try {
+                              final snapshot = await FirebaseFirestore.instance
+                                  .collection('inspections')
+                                  .doc(activeId.toString())
+                                  .collection('inspectionAttachments')
+                                  .get();
+
+                              if (!context.mounted) return;
+                              Navigator.of(context, rootNavigator: true).pop();
+
+                              final List<dynamic> attachments = snapshot.docs
+                                  .map((doc) => doc.data())
+                                  .toList();
+                              _showAttachmentsDialog(
+                                context,
+                                "Inspection Attachments",
+                                attachments,
+                              );
+                            } catch (e) {
+                              if (!context.mounted) return;
+                              // 🔥 Fix: Explicitly use the root navigator to pop the spinner
+                              Navigator.of(context, rootNavigator: true).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    "Failed to load attachments: $e",
+                                  ),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  "Cannot load attachments: active inspection ID not found.",
+                                ),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                          }
+                          break;
+
+                        case 'history':
                           final histories =
                               location.locationHistories
                                   ?.where(
@@ -555,8 +752,6 @@ class LocationManagementScreen extends ConsumerWidget {
                                     a.submissionDate ?? DateTime(1900),
                                   ),
                             );
-
-                            // 2. Open the Bottom Sheet Timeline!
                             _showHistoryBottomSheet(
                               context,
                               typeObj.typeName,
@@ -570,10 +765,11 @@ class LocationManagementScreen extends ConsumerWidget {
                               ),
                             );
                           }
-                        },
-                      ),
-                    );
-                  }
+                          break;
+                      }
+                    },
+                    itemBuilder: (BuildContext context) => menuItems,
+                  );
                 }
 
                 return ListTile(
@@ -598,12 +794,7 @@ class LocationManagementScreen extends ConsumerWidget {
                           : FontWeight.w600,
                     ),
                   ),
-                  trailing: actionButtons.isNotEmpty
-                      ? Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: actionButtons,
-                        )
-                      : null,
+                  trailing: trailingWidget,
                 );
               },
             ),
@@ -641,7 +832,6 @@ class LocationManagementScreen extends ConsumerWidget {
                 ),
               ),
               const Divider(height: 1),
-              // Constrain the height so it doesn't take over the whole screen if there are many records
               ConstrainedBox(
                 constraints: BoxConstraints(
                   maxHeight: MediaQuery.of(context).size.height * 0.5,
@@ -656,7 +846,6 @@ class LocationManagementScreen extends ConsumerWidget {
                       'pass',
                     );
 
-                    // Format the date nicely
                     final dateStr = history.submissionDate != null
                         ? "${history.submissionDate!.month}/${history.submissionDate!.day}/${history.submissionDate!.year}"
                         : "Unknown Date";
@@ -681,14 +870,44 @@ class LocationManagementScreen extends ConsumerWidget {
                       subtitle: Text(
                         "$dateStr • Inspector: ${history.inspector}",
                       ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        // Pop the bottom sheet first
+                      trailing: const Icon(Icons.open_in_new),
+                      onTap: () async {
+                        // Close the bottom sheet first
                         Navigator.pop(context);
-                        // Then route to the specific defects screen!
-                        context.push(
-                          '/inspection/${history.inspectionId}/defects',
-                        );
+
+                        final String reportUrl = history.reportLink;
+
+                        if (reportUrl.isNotEmpty) {
+                          final Uri url = Uri.parse(reportUrl);
+
+                          // Launch the URL
+                          final launched = await launchUrl(
+                            url,
+                            mode: LaunchMode.externalApplication,
+                          );
+
+                          if (!launched && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Could not open the report link.',
+                                ),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        } else {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Report link is not available for this record.',
+                                ),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                          }
+                        }
                       },
                     );
                   },
@@ -742,7 +961,6 @@ class LocationManagementScreen extends ConsumerWidget {
                       String fileName = 'Unknown File';
                       String? remoteUrl;
 
-                      // 🔥 SAFETY: Handle raw JSON Maps natively if the model didn't parse them
                       if (attachment is Map) {
                         fileName =
                             (attachment['Filename'] ??
@@ -754,9 +972,7 @@ class LocationManagementScreen extends ConsumerWidget {
                                     attachment['fileLink'] ??
                                     attachment['remoteUrl'])
                                 ?.toString();
-                      }
-                      // 🔥 SAFETY: Handle strongly typed Dart objects
-                      else {
+                      } else {
                         try {
                           fileName = (attachment.fileName ?? 'Unknown File')
                               .toString();
@@ -792,21 +1008,21 @@ class LocationManagementScreen extends ConsumerWidget {
                         onTap: () async {
                           if (remoteUrl != null && remoteUrl.isNotEmpty) {
                             final Uri url = Uri.parse(remoteUrl);
-                            if (await canLaunchUrl(url)) {
-                              await launchUrl(
-                                url,
-                                mode: LaunchMode.externalApplication,
-                              );
-                            } else {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Could not open link. URL may be invalid.',
-                                    ),
+
+                            // Bypass canLaunchUrl to avoid Android 11+ package visibility (queries) blocks
+                            final launched = await launchUrl(
+                              url,
+                              mode: LaunchMode.externalApplication,
+                            );
+
+                            if (!launched && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Could not open link. URL may be invalid or no browser found.',
                                   ),
-                                );
-                              }
+                                ),
+                              );
                             }
                           } else {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -838,18 +1054,24 @@ class LocationManagementScreen extends ConsumerWidget {
   Future<void> _openScheduleDialog(
     BuildContext context,
     WidgetRef ref,
-    Location location,
-  ) async {
+    Location location, {
+    int? preselectedTypeId,
+  }) async {
+    // 2. Read the warmed up holiday list from the provider value
+    final holidays = ref.read(holidayProvider).value ?? [];
+
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => ScheduleDateDialog(
         title: "Schedule Inspection",
+        companyHolidays: holidays,
         availableInspectionTypes: location.availableInspectionTypes,
+        initialInspectionTypeId: preselectedTypeId,
       ),
     );
 
     if (result != null) {
-      await ref
+      final success = await ref
           .read(locationManagementControllerProvider.notifier)
           .scheduleInspection(
             location: location,
@@ -861,17 +1083,129 @@ class LocationManagementScreen extends ConsumerWidget {
       if (!context.mounted) return;
       final state = ref.read(locationManagementControllerProvider);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            state.errorMessage ?? "Inspection scheduled successfully!",
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Inspection scheduled successfully!"),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
           ),
-          backgroundColor: state.errorMessage != null
-              ? Colors.red
-              : Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+        );
+      } else {
+        final errorMsg =
+            state.errorMessage?.replaceAll('Exception: ', '') ??
+            "Failed to schedule.";
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMsg),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _openReinspectionDialog(
+    BuildContext context,
+    WidgetRef ref,
+    int inspectionId,
+  ) async {
+    final holidays = ref.read(holidayProvider).value ?? [];
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => ScheduleDateDialog(
+        title: "Schedule Reinspection",
+        companyHolidays: holidays,
+      ),
+    );
+
+    if (result != null) {
+      final success = await ref
+          .read(locationManagementControllerProvider.notifier)
+          .scheduleReinspection(
+            inspectionId: inspectionId,
+            date: result['date'] as DateTime,
+            notes: result['notes'] as String?,
+          );
+
+      if (!context.mounted) return;
+      final state = ref.read(locationManagementControllerProvider);
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Reinspection scheduled successfully!"),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        final errorMsg =
+            state.errorMessage?.replaceAll('Exception: ', '') ??
+            "Failed to schedule.";
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMsg),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _openRescheduleDialog(
+    BuildContext context,
+    WidgetRef ref,
+    int inspectionId,
+  ) async {
+    final holidays = ref.read(holidayProvider).value ?? [];
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => ScheduleDateDialog(
+        title: "Reschedule Inspection",
+        companyHolidays: holidays,
+      ),
+    );
+
+    if (result != null) {
+      final success = await ref
+          .read(locationManagementControllerProvider.notifier)
+          .rescheduleInspection(
+            inspectionId: inspectionId,
+            date: result['date'] as DateTime,
+            notes: result['notes'] as String?,
+          );
+
+      if (!context.mounted) return;
+      final state = ref.read(locationManagementControllerProvider);
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Inspection rescheduled successfully!"),
+            backgroundColor: Colors.blue,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        final errorMsg =
+            state.errorMessage?.replaceAll('Exception: ', '') ??
+            "Failed to reschedule.";
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMsg),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     }
   }
 
@@ -915,7 +1249,10 @@ class LocationManagementScreen extends ConsumerWidget {
             backgroundColor: Colors.green,
           ),
         );
-        context.pop();
+
+        if (isClosing) {
+          context.goNamed('locations_list');
+        }
       }
     }
   }

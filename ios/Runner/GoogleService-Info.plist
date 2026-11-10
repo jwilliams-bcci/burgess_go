@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.burgess-inc.burgessGo</string>
+	<string>com.burgessinc.burgessgo</string>
 	<key>PROJECT_ID</key>
 	<string>keystone-31e70</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:336296135887:ios:7a83ef19a40d45b90cfbba</string>
+	<string>1:336296135887:ios:e14f61a883bb03f40cfbba</string>
 </dict>
 </plist>

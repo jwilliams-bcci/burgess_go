@@ -7,12 +7,14 @@ class ScheduleDateDialog extends StatefulWidget {
   final String title;
   final List<DateTime> companyHolidays;
   final List<InspectionType>? availableInspectionTypes;
+  final int? initialInspectionTypeId;
 
   const ScheduleDateDialog({
     super.key,
     required this.title,
     this.companyHolidays = const [],
     this.availableInspectionTypes,
+    this.initialInspectionTypeId,
   });
 
   @override
@@ -23,6 +25,12 @@ class _ScheduleDateDialogState extends State<ScheduleDateDialog> {
   DateTime? _selectedDate;
   int? _selectedInspectionTypeId; // Holds the selected dropdown value
   final TextEditingController _notesController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedInspectionTypeId = widget.initialInspectionTypeId;
+  }
 
   @override
   void dispose() {
@@ -64,7 +72,6 @@ class _ScheduleDateDialogState extends State<ScheduleDateDialog> {
         _selectedInspectionTypeId == null) {
       return false;
     }
-
     return true;
   }
 
@@ -83,9 +90,11 @@ class _ScheduleDateDialogState extends State<ScheduleDateDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // --- Inspection Type Dropdown ---
+            // --- Inspection Type Dropdown ---
             if (showTypeDropdown) ...[
               DropdownButtonFormField<int>(
-                value: _selectedInspectionTypeId,
+                isExpanded: true,
+                initialValue: _selectedInspectionTypeId,
                 decoration: const InputDecoration(
                   labelText: "Inspection Type *",
                   border: OutlineInputBorder(),
@@ -93,7 +102,6 @@ class _ScheduleDateDialogState extends State<ScheduleDateDialog> {
                 ),
                 hint: const Text("Select an inspection type"),
                 items: widget.availableInspectionTypes!.map((type) {
-                  // 🔥 Check the iconStatus we mapped from the SQL database
                   final isUnavailable = [
                     'Pass',
                     'Scheduled',
@@ -102,8 +110,7 @@ class _ScheduleDateDialogState extends State<ScheduleDateDialog> {
 
                   return DropdownMenuItem<int>(
                     value: type.inspectionTypeId,
-                    enabled:
-                        !isUnavailable, // 🔥 Disables clicking if unavailable
+                    enabled: !isUnavailable,
                     child: Text(
                       isUnavailable
                           ? "${type.typeName} (${type.iconStatus})"
@@ -114,6 +121,7 @@ class _ScheduleDateDialogState extends State<ScheduleDateDialog> {
                             ? FontStyle.italic
                             : FontStyle.normal,
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   );
                 }).toList(),

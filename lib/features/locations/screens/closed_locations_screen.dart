@@ -58,7 +58,7 @@ class ClosedLocationsScreen extends ConsumerWidget {
                 inspections: locationInspections,
                 isClosedOut: true, // Triggers the UI change in your card!
                 onTap: () {
-                  context.goNamed(
+                  context.pushNamed(
                     'location_management',
                     pathParameters: {
                       'locationId': location.locationId.toString(),

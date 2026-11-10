@@ -195,15 +195,20 @@ class LocationCard extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              "BUILD PROGRESS",
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.8,
-                color: Colors.grey[600],
+            Expanded(
+              child: Text(
+                "BUILD PROGRESS",
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.8,
+                  color: Colors.grey[600],
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: 8),
             Text(
               "${(progressPercent * 100).toInt()}%",
               style: TextStyle(
@@ -276,10 +281,11 @@ class LocationCard extends StatelessWidget {
 
   // --- HELPER: Closed Out State ---
   Widget _buildClosedOutSection() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.archive, color: Colors.grey, size: 20),
             SizedBox(width: 8),
@@ -294,13 +300,17 @@ class LocationCard extends StatelessWidget {
             ),
           ],
         ),
-        OutlinedButton.icon(
-          onPressed: onToggleCloseOut,
-          icon: const Icon(Icons.unarchive, size: 18),
-          label: const Text("Re-open"),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFF003366), // Burgess Blue
-            side: const BorderSide(color: Color(0xFF003366)),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: onToggleCloseOut,
+            icon: const Icon(Icons.unarchive, size: 18),
+            label: const Text("Re-open"),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF003366), // Burgess Blue
+              side: const BorderSide(color: Color(0xFF003366)),
+            ),
           ),
         ),
       ],

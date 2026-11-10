@@ -129,19 +129,21 @@ class LoginController extends Notifier<LoginState> {
     }
   }
 
-  Future<void> resetPassword(String email) async {
+  Future<bool> resetPassword(String email) async {
     _logger.info("Password reset requested for: $email");
     state = state.copyWith(isLoading: true, errorMessage: null);
 
     try {
       await _authService.sendPasswordResetEmail(email);
       state = state.copyWith(isLoading: false);
+      return true;
     } catch (e) {
       _logger.warning("Password reset failed: $e");
       state = state.copyWith(
         isLoading: false,
         errorMessage: e.toString().replaceFirst('Exception: ', ''),
       );
+      return false;
     }
   }
 }

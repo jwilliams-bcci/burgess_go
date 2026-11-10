@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/material.dart'; // Added for debugPrint
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart'; // Added for routing
 import 'package:burgess_go/core/providers/service_providers.dart';
@@ -25,10 +25,35 @@ class PushNotificationService {
       sound: true,
     );
 
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+    if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+        settings.authorizationStatus == AuthorizationStatus.provisional) {
       logger.info('Push Notifications: User granted permission.');
 
+      // Ensure iOS displays notification banners/sounds even when the app is in the foreground
+      await _fcm.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
       try {
+        // On iOS, APNs token registration is asynchronous after permission grant.
+        // Wait briefly for the APNs token before requesting the FCM token.
+        if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+          String? apnsToken = await _fcm.getAPNSToken();
+          int retries = 0;
+          while (apnsToken == null && retries < 5) {
+            await Future.delayed(const Duration(seconds: 1));
+            apnsToken = await _fcm.getAPNSToken();
+            retries++;
+          }
+          if (apnsToken == null) {
+            logger.warning(
+              'Push Notifications: APNs token not yet available (Note: iOS Simulator or missing APNs entitlement may not return an APNs token).',
+            );
+          }
+        }
+
         String? token = await _fcm.getToken();
         if (token != null) {
           logger.info('🔥 FCM Token: $token');

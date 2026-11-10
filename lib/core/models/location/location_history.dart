@@ -22,11 +22,8 @@ class LocationHistory {
 
   factory LocationHistory.fromMap(Map<String, dynamic> data) {
     return LocationHistory(
-      // Provide a fallback of 0 for missing integers
-      inspectionId: data['inspectionId'] as int? ?? 0,
-      inspectionTypeId: data['inspectionTypeId'] as int? ?? 0,
-
-      // Provide a fallback of '' or 'Unknown' for missing strings
+      inspectionId: data['inspectionId'] as int,
+      inspectionTypeId: data['inspectionTypeId'] as int,
       inspectionType: data['inspectionType'] as String? ?? 'Unknown Type',
       resolution: data['resolution'] as String? ?? 'Unknown',
       submissionDate: parseDateTimeFromTimestamp(data['submissionDate']),

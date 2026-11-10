@@ -1,4 +1,4 @@
-import {sendPushToUser} from "../utils/pushHelper";
+import { sendPushToUser } from "../utils/pushHelper";
 
 export async function handleNewMessage(inspectionId: string, before: any, after: any) {
   const afterMsgs = after?.inspectionMessages || [];
@@ -8,9 +8,11 @@ export async function handleNewMessage(inspectionId: string, before: any, after:
   if (!newMessage) return;
 
   const senderId = newMessage.senderId;
-  const messageText = newMessage.message || "Sent an image or attachment";
+  
+  // 🚨 THE CRITICAL FIX: Look for messageText to match your Flutter model!
+  const messageText = newMessage.messageText || "Sent a new message";
 
-  // 🚨 Grab the SECURITY IDs that C# piped in
+  // Grab the SECURITY IDs that C# piped in
   const inspectorSecurityId = after.inspectorSecurityUserId;
   const superSecurityId = after.superintendentSecurityUserId;
 
@@ -19,11 +21,9 @@ export async function handleNewMessage(inspectionId: string, before: any, after:
 
   // Figure out who sent it, and route to the OTHER person
   if (senderId === inspectorSecurityId) {
-    // The inspector sent it, notify the superintendent!
     targetUserId = superSecurityId;
     senderName = after.inspector || "Inspector";
   } else if (senderId === superSecurityId) {
-    // The superintendent sent it, notify the inspector!
     targetUserId = inspectorSecurityId;
     senderName = after.superName || "Superintendent";
   }

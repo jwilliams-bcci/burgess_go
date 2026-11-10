@@ -1,4 +1,4 @@
-package com.burgessinc.burgess_go
+package com.burgessinc.burgessgo
 
 import io.flutter.embedding.android.FlutterActivity
 

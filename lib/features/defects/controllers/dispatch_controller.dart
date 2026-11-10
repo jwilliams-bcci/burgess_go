@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart'; // 🔥 Re-added for native app launching
 import 'package:uuid/uuid.dart';
 
 import 'package:burgess_go/features/trade_contact/models/trade_contact.dart';
@@ -30,7 +31,7 @@ class DispatchController extends Notifier<DispatchState> {
         itemsToDispatch: selectedDetails
             .map(
               (d) => TradeReviewItem(
-                defectId: d.id ?? '',
+                defectId: d.id,
                 description: d.itemDescription,
               ),
             )
@@ -80,7 +81,11 @@ class DispatchController extends Notifier<DispatchState> {
     );
   }
 
-  Future<void> sendToTrade(int inspectionId, BuildContext context) async {
+  Future<void> sendToTrade(
+    int inspectionId,
+    BuildContext context, {
+    required String method,
+  }) async {
     if (state.selectedTrade == null || state.itemsToDispatch.isEmpty) return;
 
     state = state.copyWith(isSubmitting: true);
@@ -94,12 +99,16 @@ class DispatchController extends Notifier<DispatchState> {
           .doc();
 
       final token = const Uuid().v4();
+
+      // 🔥 THE FIX: Explicitly inject the '/#/' to bypass web server 404s!
       String baseUrl = kIsWeb
           ? "${Uri.base.origin}/#"
-          : "https://burgess-go.web.app";
+          : "https://go.burgess-inc.com/#";
+
       final shareUrl =
           "$baseUrl/guest?inspectionId=$inspectionId&listId=${punchListRef.id}&token=$token";
 
+      // 1. Write the payload to Firestore
       batch.set(punchListRef, {
         'tradeName': state.selectedTrade!.name,
         'tradeContactId': state.selectedTrade!.id,
@@ -123,8 +132,37 @@ class DispatchController extends Notifier<DispatchState> {
         }
       }
 
+      // 2. Commit to Firestore
       await batch.commit();
+
+      // 3. Always copy to clipboard as a bulletproof backup
       await Clipboard.setData(ClipboardData(text: shareUrl));
+
+      // 4. Generate the custom message payload
+      final String messageBody =
+          "Hello ${state.selectedTrade!.name},\n\nHere is your requested punch list for inspection #$inspectionId.\n\nView and update items here: $shareUrl";
+
+      // 5. Launch the Native App based on user choice
+      if (method == 'sms' && state.selectedTrade!.phone != null) {
+        // Build Uri safely to handle spaces and special characters for OS parsers
+        final Uri smsUri = Uri(
+          scheme: 'sms',
+          path: state.selectedTrade!.phone,
+          queryParameters: <String, String>{'body': messageBody},
+        );
+        // Bypass canLaunchUrl to avoid Android 11+ Package Visibility query restrictions
+        await launchUrl(smsUri, mode: LaunchMode.externalApplication);
+      } else if (method == 'email' && state.selectedTrade!.email != null) {
+        final Uri emailUri = Uri(
+          scheme: 'mailto',
+          path: state.selectedTrade!.email,
+          queryParameters: <String, String>{
+            'subject': 'Punch List for Inspection #$inspectionId',
+            'body': messageBody,
+          },
+        );
+        await launchUrl(emailUri, mode: LaunchMode.externalApplication);
+      }
 
       if (context.mounted) {
         // 🔥 WIPE IT OUT: Safely clear out the checkboxes from the previous screen
@@ -133,18 +171,29 @@ class DispatchController extends Notifier<DispatchState> {
         // 🔥 POP: Instantly removes this Dispatch screen from the stack!
         context.pop();
 
+        String successMessage = "Link Copied to Clipboard!";
+        if (method == 'sms')
+          successMessage = "Text message opened & Link Copied!";
+        if (method == 'email') successMessage = "Email opened & Link Copied!";
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              "List Sent to ${state.selectedTrade!.name} & Link Copied!",
-            ),
+            content: Text(successMessage),
             backgroundColor: Colors.green[700],
-            duration: const Duration(seconds: 3),
+            duration: const Duration(seconds: 4),
           ),
         );
       }
     } catch (e) {
       debugPrint("Dispatch Error: $e");
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Failed to send list: $e"),
+            backgroundColor: Colors.red[700],
+          ),
+        );
+      }
     } finally {
       state = state.copyWith(isSubmitting: false);
     }

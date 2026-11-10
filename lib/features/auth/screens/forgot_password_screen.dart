@@ -119,7 +119,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
                                       content: Text(
-                                        'Password reset link sent!',
+                                        'If an account exists, a reset link has been sent. Please check your spam folder.',
                                       ),
                                       backgroundColor: Colors.green,
                                     ),

@@ -1,34 +1,38 @@
-import {onDocumentUpdated} from "firebase-functions/v2/firestore";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import * as admin from "firebase-admin";
-import {handleNewMessage} from "./handlers/chatHandler";
-import {handleStatusChange} from "./handlers/statusHandler";
+import { handleNewMessage } from "./handlers/chatHandler";
+import { handleStatusChange } from "./handlers/statusHandler";
 
 admin.initializeApp();
 
-export const onInspectionUpdated = onDocumentUpdated(
+// 🚨 Changed to onDocumentWritten to catch brand new Scheduled inspections
+export const onInspectionUpdated = onDocumentWritten(
   "inspections/{inspectionId}",
   async (event) => {
     if (!event.data) return;
 
-    const before = event.data.before.data();
-    const after = event.data.after.data();
+    // Safely handle creates (before is null) and deletes (after is null)
+    const before = event.data.before?.data() || {};
+    const after = event.data.after?.data();
+
+    // If the document was deleted, abort
+    if (!after) return; 
 
     // --- SCENARIO 1: NEW CHAT MESSAGE ---
-    const beforeMsgs = before?.inspectionMessages || [];
-    const afterMsgs = after?.inspectionMessages || [];
+    const beforeMsgs = before.inspectionMessages || [];
+    const afterMsgs = after.inspectionMessages || [];
     if (afterMsgs.length > beforeMsgs.length) {
       await handleNewMessage(event.params.inspectionId, before, after);
     }
 
     // --- SCENARIO 2: STATUS UPDATES ---
-    // Check if the Status ID changed,
-    // if startTime appeared, or if isUploaded flipped
-    const statusChanged = before?.inspectionStatusId !==
-    after?.inspectionStatusId;
-    const justStarted = !before?.submission?.startTime &&
-    after?.submission?.startTime;
-    const justCompleted = before?.isUploaded !== true &&
-    after?.isUploaded === true;
+    const statusChanged = before.inspectionStatusId !== after.inspectionStatusId;
+    
+    // Safely check nested submission objects
+    const beforeStartTime = before.submission?.startTime;
+    const afterStartTime = after.submission?.startTime;
+    const justStarted = !beforeStartTime && afterStartTime;
+    const justCompleted = before.isComplete !== true && after.isComplete === true;
 
     if (statusChanged || justStarted || justCompleted) {
       await handleStatusChange(event.params.inspectionId, before, after);

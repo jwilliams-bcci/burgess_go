@@ -66,10 +66,10 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyAeDI7tXGE5230ydZZBQYhUl2kAckyq3_c',
-    appId: '1:336296135887:ios:7a83ef19a40d45b90cfbba',
+    appId: '1:336296135887:ios:e14f61a883bb03f40cfbba',
     messagingSenderId: '336296135887',
     projectId: 'keystone-31e70',
     storageBucket: 'keystone-31e70.firebasestorage.app',
-    iosBundleId: 'com.burgess-inc.burgessGo',
+    iosBundleId: 'com.burgessinc.burgessgo',
   );
 }

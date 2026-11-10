@@ -1,22 +1,21 @@
-import {sendPushToUser} from "../utils/pushHelper";
+import { sendPushToUser } from "../utils/pushHelper";
 
 export async function handleStatusChange(inspectionId: string, before: any, after: any) {
-  // We only send these specific alerts to the Superintendent
   const superId = after.superintendentSecurityUserId;
   if (!superId) return;
 
-  // Extract the variables from the document to inject into the messages
   const type = after.inspectionType || "Inspection";
   const inspector = after.inspector || "An inspector";
   const resolution = after.resolution || "View app for details";
 
-  // 1. SCHEDULED (inspectionStatusId changes to 1)
+  // 1. SCHEDULED (inspectionStatusId is 1)
+  // Handles both brand new creations (before is empty) and updates
   if (before.inspectionStatusId !== 1 && after.inspectionStatusId === 1) {
     await sendPushToUser(
       superId,
       "Inspection Confirmed 📅",
       `Your ${type} inspection is confirmed!`,
-      {type: "status_update", inspectionId}
+      { type: "status_update", inspectionId }
     );
   }
 
@@ -26,7 +25,7 @@ export async function handleStatusChange(inspectionId: string, before: any, afte
       superId,
       "Inspector Assigned 👷‍♂️",
       `${inspector} will be performing your ${type} inspection.`,
-      {type: "status_update", inspectionId}
+      { type: "status_update", inspectionId }
     );
   }
 
@@ -39,17 +38,18 @@ export async function handleStatusChange(inspectionId: string, before: any, afte
       superId,
       "Inspection Started ▶️",
       `Your ${type} inspection has started.`,
-      {type: "status_update", inspectionId}
+      { type: "status_update", inspectionId }
     );
   }
 
-  // 4. COMPLETED (isUploaded flag is created/switched to true)
-  if (before.isUploaded !== true && after.isUploaded === true) {
+  // 4. COMPLETED (isComplete flag is flipped to true)
+  // 🚨 Updated to isComplete!
+  if (before.isComplete !== true && after.isComplete === true) {
     await sendPushToUser(
       superId,
       "Inspection Completed ✅",
       `Your ${type} inspection has been updated. Resolution: ${resolution}`,
-      {type: "status_update", inspectionId}
+      { type: "status_update", inspectionId }
     );
   }
 }

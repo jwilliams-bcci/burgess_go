@@ -50,7 +50,12 @@ class _DispatchScreenState extends ConsumerState<DispatchScreen> {
             TextButton(
               onPressed: state.isSubmitting
                   ? null
-                  : () => controller.sendToTrade(widget.inspectionId, context),
+                  : () => _showDeliveryMethodSheet(
+                      context,
+                      ref,
+                      state,
+                      controller,
+                    ),
               child: const Text(
                 "SEND",
                 style: TextStyle(
@@ -288,6 +293,99 @@ class _DispatchScreenState extends ConsumerState<DispatchScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // --- NEW: Delivery Method Bottom Sheet ---
+  void _showDeliveryMethodSheet(
+    BuildContext context,
+    WidgetRef ref,
+    DispatchState state,
+    DispatchController controller,
+  ) {
+    if (state.selectedTrade == null) return;
+    final trade = state.selectedTrade!;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (BuildContext bottomSheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  "Send to ${trade.name}",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blueGrey[900],
+                  ),
+                ),
+              ),
+              const Divider(height: 1),
+
+              if (trade.phone != null && trade.phone!.isNotEmpty)
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.green[100],
+                    child: Icon(Icons.sms, color: Colors.green[800]),
+                  ),
+                  title: const Text("Send Text Message"),
+                  subtitle: Text(trade.phone!),
+                  onTap: () {
+                    Navigator.pop(bottomSheetContext);
+                    controller.sendToTrade(
+                      widget.inspectionId,
+                      context,
+                      method: 'sms',
+                    );
+                  },
+                ),
+
+              if (trade.email != null && trade.email!.isNotEmpty)
+                ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.blue[100],
+                    child: Icon(Icons.email, color: Colors.blue[800]),
+                  ),
+                  title: const Text("Send Email"),
+                  subtitle: Text(trade.email!),
+                  onTap: () {
+                    Navigator.pop(bottomSheetContext);
+                    controller.sendToTrade(
+                      widget.inspectionId,
+                      context,
+                      method: 'email',
+                    );
+                  },
+                ),
+
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.grey[200],
+                  child: Icon(Icons.copy, color: Colors.grey[800]),
+                ),
+                title: const Text("Just Copy Link"),
+                subtitle: const Text("I'll send it myself manually"),
+                onTap: () {
+                  Navigator.pop(bottomSheetContext);
+                  controller.sendToTrade(
+                    widget.inspectionId,
+                    context,
+                    method: 'copy',
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
     );
   }
 }
