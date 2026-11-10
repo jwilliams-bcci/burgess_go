@@ -49,8 +49,10 @@ class PushNotificationService {
           }
           if (apnsToken == null) {
             logger.warning(
-              'Push Notifications: APNs token not yet available (Note: iOS Simulator or missing APNs entitlement may not return an APNs token).',
+              'Push Notifications: APNs token is NULL! iOS cannot receive pushes without an APNs token.',
             );
+          } else {
+            logger.info('🍏 APNs Token obtained: $apnsToken');
           }
         }
 
@@ -107,8 +109,10 @@ class PushNotificationService {
 
     // Handle foreground messages
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('Received a notification while app is in foreground!');
-      // Optional: You can trigger an in-app Snackbar here if you want!
+      final logger = ref.read(loggingServiceProvider);
+      logger.info(
+        '📩 Foreground Push Received! Title: ${message.notification?.title}, Body: ${message.notification?.body}, Data: ${message.data}',
+      );
     });
   }
 
