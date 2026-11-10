@@ -1,8 +1,20 @@
 import { sendPushToUser } from "../utils/pushHelper";
+import * as logger from "firebase-functions/logger";
 
 export async function handleStatusChange(inspectionId: string, before: any, after: any) {
   const superId = after.superintendentSecurityUserId;
-  if (!superId) return;
+  if (!superId) {
+    logger.warn(
+      `Inspection ${inspectionId} status changed, but superintendentSecurityUserId is missing/null.`
+    );
+    return;
+  }
+
+  logger.info(
+    `Handling status change for inspection ${inspectionId} (superId=${superId}): ` +
+    `statusId ${before.inspectionStatusId} -> ${after.inspectionStatusId}, ` +
+    `isComplete ${before.isComplete} -> ${after.isComplete}`
+  );
 
   const type = after.inspectionType || "Inspection";
   const inspector = after.inspector || "An inspector";

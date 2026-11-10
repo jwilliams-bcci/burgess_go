@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import * as logger from "firebase-functions/logger";
 
 export async function sendPushToUser(
   targetUserId: number,
@@ -14,12 +15,12 @@ export async function sendPushToUser(
   const tokens: string[] = tokenDoc.data()?.tokens || [];
 
   if (tokens.length === 0) {
-    console.log(`No push tokens found for SecurityUserId: ${targetUserId}`);
+    logger.warn(`No push tokens found in user_tokens/${targetUserId}`);
     return;
   }
 
-  console.log(
-    `Sending push notification to SecurityUserId ${targetUserId} (${tokens.length} token(s)): "${title}"`
+  logger.info(
+    `Sending push to SecurityUserId ${targetUserId} (${tokens.length} token(s)): "${title}"`
   );
 
   const response = await admin.messaging().sendEachForMulticast({
@@ -43,20 +44,17 @@ export async function sendPushToUser(
     },
   });
 
-  console.log(
-    `Push result for SecurityUserId ${targetUserId}: ` +
-    `${response.successCount} succeeded, ${response.failureCount} failed.`
+  logger.info(
+    `Push result for SecurityUserId ${targetUserId}: ${response.successCount} succeeded, ${response.failureCount} failed.`
   );
 
   response.responses.forEach((resp, idx) => {
     const tokenPreview = tokens[idx] ? `${tokens[idx].substring(0, 16)}...` : "unknown";
     if (resp.success) {
-      console.log(`  ✅ Token [${idx}] (${tokenPreview}) succeeded: messageId=${resp.messageId}`);
+      logger.info(`Token [${idx}] (${tokenPreview}) succeeded: messageId=${resp.messageId}`);
     } else {
-      console.error(
-        `  ❌ Token [${idx}] (${tokenPreview}) failed: ` +
-        `code=${resp.error?.code}, message=${resp.error?.message}`,
-        resp.error
+      logger.error(
+        `Token [${idx}] (${tokenPreview}) FAILED: code=${resp.error?.code} | message=${resp.error?.message}`
       );
     }
   });
